@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  riskora-backend:
+    build: .
+    container_name: riskora-api
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    restart: always
+    environment:
+      - RUST_LOG=info
+
+  # Optional: You can run the compiler manually or via a separate scheduler
+  riskora-compiler:
+    build: .
+    container_name: riskora-compiler
+    volumes:
+      - ./data:/app/data
+    command: ["./compiler"]
+    restart: "no" # Runs once manually or periodically

@@ -1,0 +1,6 @@
+/target
+/data/*.mmdb
+/data/threats.bin
+/data/private_intel.db
+.env
+*.log
