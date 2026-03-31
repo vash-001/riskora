@@ -4,6 +4,7 @@ mod handlers;
 mod auth;
 
 use axum::{routing::{get, post}, Router, middleware};
+use tower_http::cors::{Any, CorsLayer};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
 #[tokio::main]
