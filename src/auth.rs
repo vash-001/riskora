@@ -62,13 +62,15 @@ pub async fn auth_middleware(
         return quota_exceeded_response();
     }
 
-    // Update Usage in DB
-    let _ = sqlx::query("UPDATE api_keys SET used_today = used_today + 1 WHERE key = ?")
+    // Update Usage in DB securely
+    if let Err(e) = sqlx::query("UPDATE api_keys SET used_today = used_today + 1 WHERE key = ?")
         .bind(token)
         .execute(&pool)
-        .await;
+        .await {
+            println!("CRITICAL: Quota Sync Failure: {}", e);
+        }
 
-    // Refresh cache with new usage
+    // Hot-reload cache with precise new usage
     let mut updated_info = key_info.clone();
     updated_info.used_today += 1;
     AUTH_CACHE.insert(token.to_string(), updated_info);

@@ -25,6 +25,9 @@ pub struct PremiumResponse {
     pub decision: Decision,
     pub confidence: u8,
     pub reason: String,
+    pub action: String,      // Productization: "block_signup", "manual_review"
+    pub profile: String,     // Productization: "bot_attacker", "legit_user"
+    pub explanation: std::collections::HashMap<String, u8>, // Productization: Factor weighting
     pub recommendation: String,
     pub signals: Signals,
     pub network: NetworkContext,
@@ -42,6 +45,7 @@ pub struct Signals {
     pub is_known_attacker: bool,
     pub is_honeypot_caught: bool,
     pub is_community_reported: bool,
+    pub is_high_velocity: bool, // Sentinel addition
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -49,12 +53,15 @@ pub struct NetworkContext {
     pub asn: String,
     pub isp: String,
     pub r#type: String,
+    pub asn_score: u8,       // Sentinel addition
+    pub stability_rank: String, // Sentinel addition
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LocationContext {
     pub country: String,
     pub city: String,
+    pub geo_risk_score: u8, // Sentinel addition
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

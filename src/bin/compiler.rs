@@ -85,7 +85,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔄 Connecting to Private SQLite Intelligence Moat...");
     let mut private_count = 0;
     
-    // Check if file exists path
     let db_path = "data/private_intel.db";
     if std::path::Path::new(db_path).exists() {
         let mut conn = SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(db_path)).await?;
@@ -107,9 +106,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         println!("✅ Injected {} High-Confidence Moat IPs.", private_count);
-    } else {
-        println!("⚠️ No private_intel.db found. Skipping Moat ingestion.");
     }
+
+    // 5. Datacenter ASN List (Infrastructure Intelligence)
+    println!("🔄 Fetching Datacenter ASN Blacklist...");
+    let mut dc_asns: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    let dc_url = "https://raw.githubusercontent.com/brianhama/bad-asn-list/master/bad-asn-list.csv";
+    if let Ok(resp) = reqwest::get(dc_url).await {
+        if let Ok(text) = resp.text().await {
+            for line in text.lines() {
+                if let Ok(asn) = line.trim().parse::<u32>() {
+                    dc_asns.insert(asn);
+                }
+            }
+            println!("✅ Loaded {} Cloud/Datacenter ASNs.", dc_asns.len());
+        }
+    }
+    let dc_encoded: Vec<u8> = bincode::serialize(&dc_asns)?;
+    let mut dc_file = File::create("data/datacenters.bin")?;
+    dc_file.write_all(&dc_encoded)?;
 
     // Finalize
     println!("💾 Serializing flat IP Array...");
