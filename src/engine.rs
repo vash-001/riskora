@@ -130,6 +130,16 @@ impl DecisionEngine {
             .map(|s| s.to_string())
             .unwrap_or_else(|| "Unknown".to_string());
         
+        let latitude = city_res.as_ref()
+            .and_then(|c| c.location.as_ref())
+            .and_then(|l| l.latitude)
+            .unwrap_or(0.0);
+
+        let longitude = city_res.as_ref()
+            .and_then(|c| c.location.as_ref())
+            .and_then(|l| l.longitude)
+            .unwrap_or(0.0);
+        
         let asn_num = asn_res.as_ref().and_then(|a| a.autonomous_system_number).unwrap_or(0);
         let isp_name = asn_res.as_ref().and_then(|a| a.autonomous_system_organization).unwrap_or("Internal Network").to_string();
 
@@ -204,6 +214,8 @@ impl DecisionEngine {
             location: LocationContext {
                 country: country_iso,
                 city: city_name,
+                latitude,
+                longitude,
                 geo_risk_score: geo_penalty,
             },
             behavior: BehaviorContext {

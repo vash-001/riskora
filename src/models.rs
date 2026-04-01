@@ -61,6 +61,8 @@ pub struct NetworkContext {
 pub struct LocationContext {
     pub country: String,
     pub city: String,
+    pub latitude: f64,
+    pub longitude: f64,
     pub geo_risk_score: u8, // Sentinel addition
 }
 
@@ -98,4 +100,62 @@ pub struct AuthError {
     pub error: String,
     pub message: String,
     pub upgrade_url: String,
+}
+
+// --- Phase 7: Admin, Blog & Stats Models ---
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LogEntry {
+    pub ip: String,
+    pub action: String,
+    pub profile: String,
+    pub api_key: String,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
+pub struct BlogPost {
+    pub id: Option<i64>,
+    pub title: String,
+    pub slug: String,
+    pub content: String,
+    pub excerpt: String,
+    pub author: String,
+    pub category: String,
+    pub published_at: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdminStats {
+    pub total_requests_24h: i64,
+    pub top_ips: Vec<TopItem>,
+    pub top_keys: Vec<TopItem>,
+    pub geo_distribution: Vec<GeoPoint>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct TopItem {
+    pub label: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct GeoPoint {
+    pub lat: f64,
+    pub lon: f64,
+    pub count: i64,
+    pub country: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WebhookConfig {
+    pub api_key: String,
+    pub url: String,
+    pub secret: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminAuthPayload {
+    pub secret: String,
 }

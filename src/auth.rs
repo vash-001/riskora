@@ -75,6 +75,10 @@ pub async fn auth_middleware(
     updated_info.used_today += 1;
     AUTH_CACHE.insert(token.to_string(), updated_info);
 
+    // Pass API key to handlers for logging
+    let mut request = request;
+    request.extensions_mut().insert(key_info.key.clone());
+
     next.run(request).await
 }
 
