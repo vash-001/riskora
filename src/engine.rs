@@ -141,10 +141,19 @@ impl DecisionEngine {
             .unwrap_or(0.0);
         
         let asn_num = asn_res.as_ref().and_then(|a| a.autonomous_system_number).unwrap_or(0);
-        let isp_name = asn_res.as_ref().and_then(|a| a.autonomous_system_organization).unwrap_or("Internal Network").to_string();
+        let org_str = asn_res.as_ref().and_then(|a| a.autonomous_system_organization).unwrap_or("Unknown");
+        let isp_name = org_str.to_string();
+        
+        // 💡 لمسة الـ Senior: كشف الداتاسنتر تلقائياً من اسم الشركة!
+        let org_lower = org_str.to_lowercase();
+        let is_dc_by_name = org_lower.contains("cloudflare") || 
+                            org_lower.contains("amazon") || 
+                            org_lower.contains("digitalocean") ||
+                            org_lower.contains("hetzner") ||
+                            org_lower.contains("oracle");
 
         // --- LAYER 2: Behavioral & Infrastructure Analysis ---
-        let is_datacenter = self.datacenters.contains(&asn_num);
+        let is_datacenter = self.datacenters.contains(&asn_num) || is_dc_by_name;
         let threat_flags = self.threat_table.load().longest_match(ip).map(|(_, &f)| f).unwrap_or(0);
         let velocity_rank = self.track_velocity(ip_str);
 
