@@ -1,6 +1,9 @@
 /target
 /data/*.mmdb
 /data/threats.bin
+/data/datacenters.bin
 /data/private_intel.db
+/data/private_intel.db-shm
+/data/private_intel.db-wal
 .env
 *.log

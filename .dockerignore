@@ -1,0 +1,25 @@
+# Rust build artifacts (biggest savings)
+target/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Environment files (never in Docker)
+.env
+.env.*
+
+# Data files (mounted as volume)
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.bin
+data/*.mmdb
+
+# Documentation
+README.md
+*.md

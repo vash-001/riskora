@@ -10,6 +10,7 @@ pub const FLAG_DATACENTER: u8 = 1 << 2;
 pub const FLAG_KNOWN_ATTACKER: u8 = 1 << 3;
 pub const FLAG_HONEYPOT: u8 = 1 << 4;
 pub const FLAG_COMMUNITY: u8 = 1 << 5;
+pub const FLAG_PROXY: u8 = 1 << 6;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -67,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             for line in text.lines() {
                 if line.starts_with('#') { continue; }
                 let parts: Vec<&str> = line.split(',').collect();
-                if parts.len() > 0 {
+                if !parts.is_empty() {
                     if let Ok(ip) = parts[0].parse::<std::net::IpAddr>() {
                         let prefix = if ip.is_ipv4() { 32 } else { 128 };
                         if let Ok(net) = IpNetwork::new(ip, prefix) {
@@ -81,7 +82,196 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // 4. THE MOAT: Read from Private `private_intel.db` Database (Honeypots & Client Feedback)
+    // 3b. FeodoTracker — Active C2 Botnet Controllers (Abuse.ch)
+    println!("🔄 Fetching FeodoTracker C2 Botnet Controllers...");
+    if let Ok(resp) = reqwest::get("https://feodotracker.abuse.ch/downloads/ipblocklist.txt").await {
+        if let Ok(text) = resp.text().await {
+            let mut count = 0;
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') { continue; }
+                if let Ok(ip) = line.parse::<std::net::IpAddr>() {
+                    let prefix = if ip.is_ipv4() { 32 } else { 128 };
+                    if let Ok(net) = IpNetwork::new(ip, prefix) {
+                        rules.push((net, FLAG_KNOWN_ATTACKER));
+                        count += 1;
+                    }
+                }
+            }
+            println!("✅ Inserted {} C2 Botnet Controller IPs.", count);
+        }
+    }
+
+    // 4. Spamhaus DROP + EDROP (High Priority — dangerous CIDR blocks)
+    println!("🔄 Fetching Spamhaus DROP + EDROP Lists...");
+    let spamhaus_urls = vec![
+        "https://www.spamhaus.org/drop/drop.txt",
+        "https://www.spamhaus.org/drop/edrop.txt",
+    ];
+    for url in spamhaus_urls {
+        if let Ok(resp) = reqwest::get(url).await {
+            if let Ok(text) = resp.text().await {
+                let mut count = 0;
+                for line in text.lines() {
+                    let line = line.trim();
+                    if line.is_empty() || line.starts_with(';') || line.starts_with('#') { continue; }
+                    // Format: "1.2.3.0/24 ; SBL12345"
+                    let cidr = line.split(';').next().unwrap_or("").trim();
+                    if let Ok(network) = cidr.parse::<IpNetwork>() {
+                        rules.push((network, FLAG_KNOWN_ATTACKER));
+                        count += 1;
+                    }
+                }
+                println!("✅ Inserted {} Spamhaus DROP/EDROP CIDR blocks.", count);
+            }
+        }
+    }
+
+    // 5. Firehol Level 3 (Additional threat layer)
+    println!("🔄 Fetching Firehol Level 3...");
+    if let Ok(resp) = reqwest::get("https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level3.netset").await {
+        if let Ok(text) = resp.text().await {
+            let mut count = 0;
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') { continue; }
+                if let Ok(network) = line.parse::<IpNetwork>() {
+                    rules.push((network, FLAG_KNOWN_ATTACKER));
+                    count += 1;
+                }
+            }
+            println!("✅ Inserted {} Firehol Level 3 IPs.", count);
+        }
+    }
+
+    // 6. CINS Score — Daily updated attacker IPs
+    println!("🔄 Fetching CINS Score Active Threat List...");
+    if let Ok(resp) = reqwest::get("http://cinsscore.com/list/ci-badguys.txt").await {
+        if let Ok(text) = resp.text().await {
+            let mut count = 0;
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') { continue; }
+                if let Ok(ip) = line.parse::<std::net::IpAddr>() {
+                    let prefix = if ip.is_ipv4() { 32 } else { 128 };
+                    if let Ok(net) = IpNetwork::new(ip, prefix) {
+                        rules.push((net, FLAG_KNOWN_ATTACKER));
+                        count += 1;
+                    }
+                }
+            }
+            println!("✅ Inserted {} CINS Score attacker IPs.", count);
+        }
+    }
+
+    // 7. IPsum — Mega aggregator of 5000+ threat sources (filtered to score >= 3)
+    println!("🔄 Fetching IPsum Aggregated Threat List...");
+    if let Ok(resp) = reqwest::get("https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt").await {
+        if let Ok(text) = resp.text().await {
+            let mut count = 0;
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') { continue; }
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    // Only include IPs seen in 3+ sources (high confidence)
+                    let score: u32 = parts[1].parse().unwrap_or(0);
+                    if score >= 3 {
+                        if let Ok(ip) = parts[0].parse::<std::net::IpAddr>() {
+                            let prefix = if ip.is_ipv4() { 32 } else { 128 };
+                            if let Ok(net) = IpNetwork::new(ip, prefix) {
+                                rules.push((net, FLAG_KNOWN_ATTACKER));
+                                count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            println!("✅ Inserted {} IPsum high-confidence IPs (score >= 3).", count);
+        }
+    }
+
+    // 8. Botvrij.eu IOC List
+    println!("🔄 Fetching Botvrij.eu IOC IP List...");
+    if let Ok(resp) = reqwest::get("https://www.botvrij.eu/data/ioc-ip.txt").await {
+        if let Ok(text) = resp.text().await {
+            let mut count = 0;
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') { continue; }
+                if let Ok(ip) = line.parse::<std::net::IpAddr>() {
+                    let prefix = if ip.is_ipv4() { 32 } else { 128 };
+                    if let Ok(net) = IpNetwork::new(ip, prefix) {
+                        rules.push((net, FLAG_KNOWN_ATTACKER));
+                        count += 1;
+                    }
+                }
+            }
+            println!("✅ Inserted {} Botvrij.eu IOC IPs.", count);
+        }
+    }
+
+    // 9. Emerging Threats (Compromised IPs)
+    println!("🔄 Fetching Emerging Threats Compromised IPs...");
+    if let Ok(resp) = reqwest::get("https://rules.emergingthreats.net/blockrules/compromised-ips.txt").await {
+        if let Ok(text) = resp.text().await {
+            let mut count = 0;
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') { continue; }
+                if let Ok(ip) = line.parse::<std::net::IpAddr>() {
+                    let prefix = if ip.is_ipv4() { 32 } else { 128 };
+                    if let Ok(net) = IpNetwork::new(ip, prefix) {
+                        rules.push((net, FLAG_KNOWN_ATTACKER));
+                        count += 1;
+                    }
+                }
+            }
+            println!("✅ Inserted {} Emerging Threats IPs.", count);
+        }
+    }
+
+    // 10. BinaryDefense Banlist
+    println!("🔄 Fetching BinaryDefense Banlist...");
+    if let Ok(resp) = reqwest::get("https://www.binarydefense.com/banlist.txt").await {
+        if let Ok(text) = resp.text().await {
+            let mut count = 0;
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') { continue; }
+                if let Ok(ip) = line.parse::<std::net::IpAddr>() {
+                    let prefix = if ip.is_ipv4() { 32 } else { 128 };
+                    if let Ok(net) = IpNetwork::new(ip, prefix) {
+                        rules.push((net, FLAG_KNOWN_ATTACKER));
+                        count += 1;
+                    }
+                }
+            }
+            println!("✅ Inserted {} BinaryDefense IPs.", count);
+        }
+    }
+
+    // 11. Blocklist.de All Attackers
+    println!("🔄 Fetching Blocklist.de Attackers...");
+    if let Ok(resp) = reqwest::get("https://lists.blocklist.de/lists/all.txt").await {
+        if let Ok(text) = resp.text().await {
+            let mut count = 0;
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') { continue; }
+                if let Ok(ip) = line.parse::<std::net::IpAddr>() {
+                    let prefix = if ip.is_ipv4() { 32 } else { 128 };
+                    if let Ok(net) = IpNetwork::new(ip, prefix) {
+                        rules.push((net, FLAG_KNOWN_ATTACKER));
+                        count += 1;
+                    }
+                }
+            }
+            println!("✅ Inserted {} Blocklist.de IPs.", count);
+        }
+    }
+
+    // 12. THE MOAT: Read from Private `private_intel.db` Database (Honeypots & Client Feedback)
     println!("🔄 Connecting to Private SQLite Intelligence Moat...");
     let mut private_count = 0;
     

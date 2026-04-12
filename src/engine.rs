@@ -9,7 +9,6 @@ use ip_network_table::IpNetworkTable;
 use ip_network::IpNetwork;
 use moka::sync::Cache;
 use chrono::{Utc, DateTime};
-use dashmap::DashMap;
 use once_cell::sync::Lazy;
 
 // --- Static Intelligence Matrices ---
@@ -42,6 +41,7 @@ pub const FLAG_VPN: u8 = 1 << 1;
 pub const FLAG_KNOWN_ATTACKER: u8 = 1 << 3;
 pub const FLAG_HONEYPOT: u8 = 1 << 4;
 pub const FLAG_COMMUNITY: u8 = 1 << 5;
+pub const FLAG_PROXY: u8 = 1 << 6;
 
 #[derive(Clone, Debug)]
 pub struct IpHistory {
@@ -58,7 +58,7 @@ pub struct DecisionEngine {
     pub datacenters: HashSet<u32>,
     pub threat_table: Arc<ArcSwap<IpNetworkTable<u8>>>,
     pub behavior_cache: Cache<String, IpHistory>,
-    pub velocity_store: DashMap<String, (u32, Instant)>, // (Count, LastUpdate)
+    pub velocity_store: Cache<String, u32>,
 }
 
 impl DecisionEngine {
@@ -79,7 +79,10 @@ impl DecisionEngine {
             .time_to_idle(Duration::from_secs(48 * 60 * 60))
             .build();
 
-        let velocity_store = DashMap::new();
+        let velocity_store = Cache::builder()
+            .max_capacity(100_000)
+            .time_to_live(Duration::from_secs(60))
+            .build();
 
         println!("✅ SENTINEL CORE BOOTED. Ready for high-traffic intelligence autopsy.");
 
@@ -205,7 +208,7 @@ impl DecisionEngine {
             recommendation: self.generate_recommendation(final_risk_score, context),
             signals: Signals {
                 is_vpn: (threat_flags & FLAG_VPN) != 0,
-                is_proxy: (threat_flags & FLAG_VPN) != 0 || is_datacenter,
+                is_proxy: (threat_flags & FLAG_PROXY) != 0 || is_datacenter,
                 is_tor: (threat_flags & FLAG_TOR) != 0,
                 is_datacenter,
                 is_known_attacker: (threat_flags & FLAG_KNOWN_ATTACKER) != 0,
@@ -238,18 +241,9 @@ impl DecisionEngine {
 
     /// Internal: Track and resolve IP request velocity in memory
     fn track_velocity(&self, ip: &str) -> u32 {
-        let now = Instant::now();
-        let mut velocity = self.velocity_store.entry(ip.to_string()).or_insert((0, now));
-        
-        // Reset every 60 seconds
-        if now.duration_since(velocity.1).as_secs() > 60 {
-            velocity.0 = 1;
-            velocity.1 = now;
-        } else {
-            velocity.0 += 1;
-        }
-        
-        velocity.0
+        let count = self.velocity_store.get(ip).unwrap_or(0) + 1;
+        self.velocity_store.insert(ip.to_string(), count);
+        count
     }
 
     fn resolve_risk_level(&self, score: u8) -> RiskLevel {
@@ -339,4 +333,5 @@ impl DecisionEngine {
         if velocity > 15 { threats.push("velocity_bot_signature".to_string()); }
         threats
     }
+
 }

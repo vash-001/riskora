@@ -25,9 +25,9 @@ pub struct PremiumResponse {
     pub decision: Decision,
     pub confidence: u8,
     pub reason: String,
-    pub action: String,      // Productization: "block_signup", "manual_review"
-    pub profile: String,     // Productization: "bot_attacker", "legit_user"
-    pub explanation: std::collections::HashMap<String, u8>, // Productization: Factor weighting
+    pub action: String,
+    pub profile: String,
+    pub explanation: std::collections::HashMap<String, u8>,
     pub recommendation: String,
     pub signals: Signals,
     pub network: NetworkContext,
@@ -45,7 +45,7 @@ pub struct Signals {
     pub is_known_attacker: bool,
     pub is_honeypot_caught: bool,
     pub is_community_reported: bool,
-    pub is_high_velocity: bool, // Sentinel addition
+    pub is_high_velocity: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -53,8 +53,8 @@ pub struct NetworkContext {
     pub asn: String,
     pub isp: String,
     pub r#type: String,
-    pub asn_score: u8,       // Sentinel addition
-    pub stability_rank: String, // Sentinel addition
+    pub asn_score: u8,
+    pub stability_rank: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -63,7 +63,7 @@ pub struct LocationContext {
     pub city: String,
     pub latitude: f64,
     pub longitude: f64,
-    pub geo_risk_score: u8, // Sentinel addition
+    pub geo_risk_score: u8,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -93,6 +93,7 @@ pub struct ApiKeyInfo {
     pub plan: String,
     pub daily_limit: i64,
     pub used_today: i64,
+    pub last_reset: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -102,7 +103,7 @@ pub struct AuthError {
     pub upgrade_url: String,
 }
 
-// --- Phase 7: Admin, Blog & Stats Models ---
+// --- Admin, Blog & Stats Models ---
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LogEntry {
@@ -123,6 +124,7 @@ pub struct BlogPost {
     pub excerpt: String,
     pub author: String,
     pub category: String,
+    pub image_url: Option<String>,
     pub published_at: Option<String>,
 }
 
@@ -132,6 +134,7 @@ pub struct AdminStats {
     pub top_ips: Vec<TopItem>,
     pub top_keys: Vec<TopItem>,
     pub geo_distribution: Vec<GeoPoint>,
+    pub time_series: Vec<TopItem>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -158,4 +161,19 @@ pub struct WebhookConfig {
 #[derive(Debug, Deserialize)]
 pub struct AdminAuthPayload {
     pub secret: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CloudinaryUploadPayload {
+    pub base64_image: String,
+}
+
+// --- Health Check Model ---
+
+#[derive(Debug, Serialize)]
+pub struct HealthStatus {
+    pub status: String,
+    pub database: String,
+    pub threat_rules: usize,
+    pub version: String,
 }
